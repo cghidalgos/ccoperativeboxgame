@@ -4,12 +4,18 @@
     <meta charset="UTF-8">
     <title>Juego</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <style>
+        button {
+            touch-action: manipulation; /* Evita zoom al dar doble tap */
+        }
+    </style>
 </head>
 <body>
     <div class="game-container">
         <h1>Juego: ¡Captura el punto naranja!</h1>
         
-        <!-- Layout principal: Canvas y Controles -->
+        <!-- Layout principal -->
         <div class="main-layout">
             <div class="canvas-container">
                 <canvas id="canvas" width="500" height="500"></canvas>
@@ -32,25 +38,15 @@
             </div>
         </div>
 
-        <!-- Layout inferior: Usuarios y Chat -->
+        <!-- Usuarios conectados -->
         <div class="bottom-layout">
             <div id="users">
                 <h3>Usuarios Conectados:</h3>
                 <ul id="user_list"></ul>
             </div>
-
-            <div id="chat">
-                <h3>Chat</h3>
-                <div id="messages"></div>
-                <div class="chat-hint">Presiona 'T' para chatear</div>
-                <!-- NUEVO input solo visible en pantallas pequeñas -->
-                <div id="mobile-chat" class="mobile-chat">
-                    <input type="text" id="mobileChatInput" placeholder="Escribe tu mensaje...">
-                    <button id="mobileChatSend">Enviar</button>
-                </div>
-            </div>
         </div>
 
+        <!-- Scripts -->
         <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script>
@@ -59,11 +55,11 @@
             let users = {}, me, obj = {}, target = {};
             const canvas = document.getElementById("canvas");
             const ctx = canvas.getContext("2d");
-            let chatMessages = [];
-            const MAX_MESSAGES = 8;
 
+            // Unirse
             socket.emit("join", { username });
 
+            // Inicializar
             socket.on("init", data => {
                 users = data.users;
                 obj = data.object;
@@ -72,6 +68,7 @@
                 draw();
             });
 
+            // Actualizar
             socket.on("update", data => {
                 users = data.users;
                 obj = data.object;
@@ -79,6 +76,7 @@
                 draw();
             });
 
+            // Victoria
             socket.on("victory", data => {
                 Swal.fire({
                     title: '¡Victoria!',
@@ -92,28 +90,12 @@
                 });
             });
 
-            socket.on("chat_message", data => {
-                chatMessages.unshift(`${data.username}: ${data.message}`);
-                if (chatMessages.length > MAX_MESSAGES) {
-                    chatMessages = chatMessages.slice(0, MAX_MESSAGES);
-                }
-                updateChatDisplay();
-            });
-
+            // Al desconectar
             socket.on("disconnect", () => {
                 socket.emit("update", { users: users, object: obj, target: target });
             });
 
-            function updateChatDisplay() {
-                const messagesContainer = document.getElementById("messages");
-                messagesContainer.innerHTML = '';
-                chatMessages.forEach(message => {
-                    const msgElement = document.createElement("div");
-                    msgElement.textContent = message;
-                    messagesContainer.appendChild(msgElement);
-                });
-            }
-
+            // Movimiento con botones
             function move(dir) {
                 const step = 10;
                 if (!users[me]) return;
@@ -125,6 +107,7 @@
                 socket.emit("move", { x: u.x, y: u.y });
             }
 
+            // Movimiento con teclado
             document.addEventListener("keydown", function(event) {
                 const key = event.key;
                 const keysToHandle = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"];
@@ -155,11 +138,7 @@
                 }
             });
 
-            function reiniciar() {
-                fetch("/reset");
-                document.getElementById("msg").textContent = "";
-            }
-
+            // Redibujar
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -202,38 +181,6 @@
                     userList.appendChild(li);
                 }
             }
-
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 't' || event.key === 'T') {
-                    Swal.fire({
-                        title: 'Chat',
-                        input: 'text',
-                        inputPlaceholder: 'comenta aqui...',
-                        showCancelButton: true,
-                        confirmButtonText: 'Aceptar',
-                        cancelButtonText: 'Cancelar'
-                    }).then((result) => {
-                        if (result.isConfirmed && result.value) {
-                            socket.emit("chat_message", { message: result.value });
-                        }
-                    });
-                }
-            });
-
-            document.getElementById("mobileChatSend").addEventListener("click", () => {
-                const input = document.getElementById("mobileChatInput");
-                const message = input.value.trim();
-                if (message !== "") {
-                    socket.emit("chat_message", { message });
-                    input.value = "";
-                }
-            });
-
-            document.getElementById("mobileChatInput").addEventListener("keydown", function(e) {
-                if (e.key === "Enter") {
-                    document.getElementById("mobileChatSend").click();
-                }
-            });
         </script>
     </div>
 </body>
