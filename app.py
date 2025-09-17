@@ -2,7 +2,6 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import random
 import math
-import time
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -16,8 +15,6 @@ colors = ["red", "blue", "green", "purple", "brown", "pink", "teal", "gold"]
 color_index = 0
 
 DISTANCIA_FIJA = 100  # En píxeles
-time_limit = 60  # Tiempo límite en segundos
-game_time = time_limit
 
 @app.route("/")
 def index():
@@ -30,15 +27,14 @@ def list_page():
 
 @app.route("/game")
 def game():
-    return render_template("game.html", time_limit=game_time)
+    return render_template("game.html")
 
 @app.route("/reset")
 def reset():
-    global object_pos, target_pos, game_time
+    global object_pos, target_pos
     object_pos = {"x": 300, "y": 300}
     target_pos = {"x": random.randint(100, 500), "y": random.randint(100, 500)}
-    game_time = time_limit
-    socketio.emit("update", {"users": users, "object": object_pos, "target": target_pos, "game_time": game_time})
+    socketio.emit("update", {"users": users, "object": object_pos, "target": target_pos})
     return ("", 204)
 
 @socketio.on("join")
@@ -53,16 +49,18 @@ def handle_join(data):
         "color": colors[color_index % len(colors)]
     }
     color_index += 1
-    emit("init", {"users": users, "object": object_pos, "target": target_pos, "game_time": game_time}, room=uid)
-    emit("update", {"users": users, "object": object_pos, "target": target_pos, "game_time": game_time}, broadcast=True)
+    emit("init", {"users": users, "object": object_pos, "target": target_pos}, room=uid)
+    emit("update", {"users": users, "object": object_pos, "target": target_pos}, broadcast=True)
 
 @socketio.on("move")
 def handle_move(data):
     uid = request.sid
-    if uid not in users: return
+    if uid not in users:
+        return
+
     new_x = data["x"]
     new_y = data["y"]
-    
+
     dx = new_x - object_pos["x"]
     dy = new_y - object_pos["y"]
     distancia_actual = math.hypot(dx, dy)
@@ -75,13 +73,15 @@ def handle_move(data):
     users[uid]["x"] = new_x
     users[uid]["y"] = new_y
 
+    # El objeto negro se mueve al promedio de todos los jugadores
     avg_x = sum(user["x"] for user in users.values()) / len(users)
     avg_y = sum(user["y"] for user in users.values()) / len(users)
     object_pos["x"] = avg_x
     object_pos["y"] = avg_y
 
-    socketio.emit("update", {"users": users, "object": object_pos, "target": target_pos, "game_time": game_time})
+    socketio.emit("update", {"users": users, "object": object_pos, "target": target_pos})
 
+    # Verificar victoria
     if math.hypot(object_pos["x"] - target_pos["x"], object_pos["y"] - target_pos["y"]) < 20:
         socketio.emit("victory", {"message": "¡Victoria! El punto negro ha llegado al punto naranja."})
 
@@ -90,7 +90,10 @@ def handle_disconnect():
     uid = request.sid
     if uid in users:
         del users[uid]
-        socketio.emit("update", {"users": users, "object": object_pos, "target": target_pos, "game_time": game_time})
+        socketio.emit("update", {"users": users, "object": object_pos, "target": target_pos})
+    if uid in waiting_room:
+        del waiting_room[uid]
+        socketio.emit("waiting_update", waiting_room)
 
 @socketio.on("chat_message")
 def handle_chat_message(data):
@@ -114,25 +117,5 @@ def set_ready(data):
         waiting_room[uid]["ready"] = data["ready"]
         emit("waiting_update", waiting_room, broadcast=True)
 
-@socketio.on("disconnect")
-def handle_disconnect():
-    uid = request.sid
-    if uid in users:
-        del users[uid]
-        socketio.emit("update", {"users": users})
-    if uid in waiting_room:
-        del waiting_room[uid]
-        socketio.emit("waiting_update", waiting_room)
-
-def countdown():
-    global game_time
-    while game_time > 0:
-        time.sleep(1)
-        game_time -= 1
-        socketio.emit("update", {"game_time": game_time})
-    if game_time == 0:
-        socketio.emit("time_up", {"message": "¡Se acabó el tiempo!"})
-
 if __name__ == '__main__':
-    socketio.start_background_task(countdown)
     socketio.run(app, debug=True, host="0.0.0.0", port=5004)
