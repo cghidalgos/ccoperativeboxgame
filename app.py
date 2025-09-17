@@ -7,6 +7,7 @@ import time
 app = Flask(__name__)
 socketio = SocketIO(app)
 
+# ------------------ VARIABLES GLOBALES ------------------ #
 users = {}
 waiting_room = {}
 object_pos = {"x": 300, "y": 300}  # Punto negro inicial
@@ -16,8 +17,9 @@ colors = ["red", "blue", "green", "purple", "brown", "pink", "teal", "gold"]
 color_index = 0
 
 DISTANCIA_FIJA = 100  # En píxeles
-time_limit = 60  # Tiempo límite en segundos
+time_limit = 60       # Tiempo límite en segundos
 game_time = time_limit
+
 
 # ------------------ RUTAS ------------------ #
 @app.route("/")
@@ -46,6 +48,22 @@ def reset():
         "game_time": game_time
     })
     return ("", 204)
+
+@app.route("/full_reset")
+def full_reset():
+    """Reinicia TODO y devuelve a los usuarios al index"""
+    global users, waiting_room, object_pos, target_pos, game_time, color_index
+    users = {}
+    waiting_room = {}
+    object_pos = {"x": 300, "y": 300}
+    target_pos = {"x": random.randint(100, 500), "y": random.randint(100, 500)}
+    game_time = time_limit
+    color_index = 0
+
+    # Avisar a todos que se reinició
+    socketio.emit("force_reset", {"message": "El juego fue reiniciado"})
+    return ("", 204)
+
 
 # ------------------ SOCKETS ------------------ #
 @socketio.on("join")
@@ -76,6 +94,7 @@ def handle_join(data):
         "target": target_pos,
         "game_time": game_time
     }, broadcast=True)
+
 
 @socketio.on("move")
 def handle_move(data):
@@ -119,6 +138,7 @@ def handle_move(data):
     if math.hypot(object_pos["x"] - target_pos["x"], object_pos["y"] - target_pos["y"]) < 20:
         socketio.emit("victory", {"message": "¡Victoria! El punto negro ha llegado al punto naranja."})
 
+
 @socketio.on("disconnect")
 def handle_disconnect():
     uid = request.sid
@@ -129,6 +149,7 @@ def handle_disconnect():
         del waiting_room[uid]
         socketio.emit("waiting_update", waiting_room)
 
+
 @socketio.on("waiting_join")
 def waiting_join(data):
     uid = request.sid
@@ -138,6 +159,7 @@ def waiting_join(data):
     }
     emit("waiting_update", waiting_room, broadcast=True)
 
+
 @socketio.on("set_ready")
 def set_ready(data):
     uid = request.sid
@@ -145,15 +167,19 @@ def set_ready(data):
         waiting_room[uid]["ready"] = data["ready"]
         emit("waiting_update", waiting_room, broadcast=True)
 
+
 # ------------------ CRONÓMETRO ------------------ #
 def countdown():
     global game_time
-    while game_time > 0:
-        time.sleep(1)
-        game_time -= 1
-        socketio.emit("update", {"game_time": game_time})
-    if game_time == 0:
-        socketio.emit("time_up", {"message": "¡Se acabó el tiempo!"})
+    while True:
+        if game_time > 0:
+            time.sleep(1)
+            game_time -= 1
+            socketio.emit("update", {"game_time": game_time})
+        elif game_time == 0:
+            socketio.emit("time_up", {"message": "¡Se acabó el tiempo!"})
+            time.sleep(1)
+
 
 # ------------------ MAIN ------------------ #
 if __name__ == '__main__':
