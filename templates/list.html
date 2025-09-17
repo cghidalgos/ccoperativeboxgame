@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sala de Espera</title>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+</head>
+<body class="text-center">
+    <div class="container mt-5">
+        <h2>Sala de espera</h2>
+        <div id="usersList" class="mt-4"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        const username = new URLSearchParams(window.location.search).get("username");
+        socket.emit("waiting_join", { username });
+
+        socket.on("waiting_update", users => {
+            const container = document.getElementById("usersList");
+            container.innerHTML = "";
+            let allReady = true;
+
+            for (const uid in users) {
+                const user = users[uid];
+                const div = document.createElement("div");
+                div.className = "d-flex justify-content-between align-items-center border p-2";
+
+                const label = document.createElement("span");
+                label.textContent = `${user.username} — ${user.ready ? "Listo ✅" : "En espera ⏳"}`;
+
+                div.appendChild(label);
+
+                if (user.username === username) {
+                    const btn = document.createElement("button");
+                    btn.textContent = user.ready ? "Cancelar" : "Listo";
+                    btn.className = "btn btn-sm " + (user.ready ? "btn-danger" : "btn-success");
+                    btn.onclick = () => socket.emit("set_ready", { ready: !user.ready });
+                    div.appendChild(btn);
+                }
+
+                container.appendChild(div);
+
+                if (!user.ready) allReady = false;
+            }
+
+            if (Object.keys(users).length >= 2 && allReady) {
+                window.location.href = "/game?username=" + encodeURIComponent(username);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -3,158 +3,273 @@
 <head>
     <meta charset="UTF-8">
     <title>Juego</title>
-    <style>
-        canvas { border: 1px solid #333; touch-action: none; }
-        #controls { margin-top: 10px; }
-        button { margin: 3px; width: 60px; height: 60px; font-size: 20px; }
-        #chat { margin-top: 20px; }
-        #users { font-size: 18px; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h1>Juego: ¡Captura el punto naranja!</h1>
-    <canvas id="canvas" width="600" height="600"></canvas>
-
-    <div id="controls">
-        <div>
-            <button onclick="move('up')">↑</button>
+    <div class="game-container">
+        <h1>Juego: ¡Captura el punto naranja!</h1>
+        
+        <!-- Layout principal: Canvas y Controles -->
+        <div class="main-layout">
+            <div class="canvas-container">
+                <canvas id="canvas" width="500" height="500"></canvas>
+                <h2 id="msg"></h2>
+            </div>
+            
+            <div class="controls-container">
+                <div id="timer">Tiempo restante: <span id="time"></span> segundos</div>
+                
+                <div id="controls">
+                    <div class="control-buttons">
+                        <div class="control-row">
+                            <button onclick="move('up')">↑</button>
+                        </div>
+                        <div class="control-row">
+                            <button onclick="move('left')">←</button>
+                            <button onclick="move('down')">↓</button>
+                            <button onclick="move('right')">→</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div>
-            <button onclick="move('left')">←</button>
-            <button onclick="move('down')">↓</button>
-            <button onclick="move('right')">→</button>
+
+        <!-- Layout inferior: Usuarios y Chat -->
+        <div class="bottom-layout">
+            <div id="users">
+                <h3>Usuarios Conectados:</h3>
+                <ul id="user_list"></ul>
+            </div>
+
+            <div id="chat">
+                <h3>Chat</h3>
+                <div id="messages"></div>
+                <div class="chat-hint">Presiona 'T' para chatear</div>
+                <!-- NUEVO input solo visible en pantallas pequeñas -->
+                <div id="mobile-chat" class="mobile-chat">
+                    <input type="text" id="mobileChatInput" placeholder="Escribe tu mensaje...">
+                    <button id="mobileChatSend">Enviar</button>
+                </div>
+            </div>
         </div>
-        <div>
-            <button onclick="reiniciar()">Reiniciar</button>
-        </div>
-        <h2 id="msg"></h2>
-        <div id="timer">Tiempo restante: <span id="time">{{ time_limit }}</span> segundos</div>
-    </div>
 
-    <div id="chat">
-        <h3>Chat</h3>
-        <input type="text" id="chat_input" placeholder="Escribe un mensaje...">
-        <button onclick="sendMessage()">Enviar</button>
-        <div id="messages"></div>
-    </div>
+        <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            const username = new URLSearchParams(window.location.search).get('username') || "Anon";
+            const socket = io();
+            let users = {}, me, obj = {}, target = {}, gameTime = 60;
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+            let chatMessages = [];
+            const MAX_MESSAGES = 8;
+            let timerInterval;
 
-    <div id="users">
-        <h3>Usuarios Conectados:</h3>
-        <ul id="user_list"></ul>
-    </div>
+            socket.emit("join", { username });
 
-    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-    <script>
-        const username = new URLSearchParams(window.location.search).get('username') || "Anon";
-        const socket = io();
-        let users = {}, me, obj = {}, target = {}, gameTime = {{ time_limit }};
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
+            socket.on("init", data => {
+                users = data.users;
+                obj = data.object;
+                target = data.target;
+                gameTime = data.game_time;
+                me = Object.keys(users).find(id => users[id].username === username);
+                draw();
 
-        socket.emit("join", { username });
+                clearInterval(timerInterval); // por si ya había uno
+                timerInterval = setInterval(() => {
+                    if (gameTime > 0) {
+                        gameTime--;
+                        document.getElementById("time").textContent = gameTime;
+                    } else {
+                        clearInterval(timerInterval);
+                        Swal.fire({
+                            icon: 'error',
+                            title: '¡Tiempo agotado!',
+                            text: 'Nadie capturó el punto a tiempo.',
+                            confirmButtonText: 'Reiniciar',
+                            allowOutsideClick: false,
+                            allowEscapeKey: false,
+                        }).then(() => {
+                            window.location.href = `/list?username=${encodeURIComponent(username)}`;
+                        });
+                    }
+                }, 1000);
+            });
 
-        socket.on("init", data => {
-            users = data.users;
-            obj = data.object;
-            target = data.target;
-            gameTime = data.game_time;
-            me = Object.keys(users).find(id => users[id].username === username);
-            draw();
-        });
+            socket.on("update", data => {
+                users = data.users;
+                obj = data.object;
+                target = data.target;
+                draw();
+                document.getElementById("time").textContent = gameTime;
+            });
 
-        socket.on("update", data => {
-            users = data.users;
-            obj = data.object;
-            target = data.target;
-            gameTime = data.game_time;
-            draw();
-            document.getElementById("time").textContent = gameTime;
-        });
+            socket.on("victory", data => {
+                Swal.fire({
+                    title: '¡Victoria!',
+                    text: data.message,
+                    icon: 'success',
+                    confirmButtonText: 'Reiniciar',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                }).then(() => {
+                    window.location.href = `/list?username=${encodeURIComponent(username)}`;
+                });
+            });
 
-        socket.on("victory", data => {
-            document.getElementById("msg").textContent = data.message;
-        });
+            socket.on("chat_message", data => {
+                // Agregar nuevo mensaje al inicio del array
+                chatMessages.unshift(`${data.username}: ${data.message}`);
+                
+                // Mantener solo los últimos 8 mensajes
+                if (chatMessages.length > MAX_MESSAGES) {
+                    chatMessages = chatMessages.slice(0, MAX_MESSAGES);
+                }
+                
+                // Actualizar la visualización
+                updateChatDisplay();
+            });
 
-        socket.on("chat_message", data => {
-            const msgElement = document.createElement("div");
-            msgElement.textContent = `${data.username}: ${data.message}`;
-            document.getElementById("messages").appendChild(msgElement);
-        });
+            socket.on("disconnect", () => {
+                socket.emit("update", { users: users, object: obj, target: target });
+            });
 
-        socket.on("time_up", data => {
-            alert(data.message);
-        });
-
-        socket.on("disconnect", () => {
-            socket.emit("update", { users: users, object: obj, target: target });
-        });
-
-        function move(dir) {
-            const step = 10;
-            if (!users[me]) return;
-            let u = users[me];
-            if (dir === "up") u.y -= step;
-            if (dir === "down") u.y += step;
-            if (dir === "left") u.x -= step;
-            if (dir === "right") u.x += step;
-            socket.emit("move", { x: u.x, y: u.y });
-        }
-
-        function reiniciar() {
-            fetch("/reset");
-            document.getElementById("msg").textContent = "";
-        }
-
-        function sendMessage() {
-            const msg = document.getElementById("chat_input").value;
-            if (msg) {
-                socket.emit("chat_message", { message: msg });
-                document.getElementById("chat_input").value = '';
+            function updateChatDisplay() {
+                const messagesContainer = document.getElementById("messages");
+                messagesContainer.innerHTML = '';
+                
+                chatMessages.forEach(message => {
+                    const msgElement = document.createElement("div");
+                    msgElement.textContent = message;
+                    messagesContainer.appendChild(msgElement);
+                });
             }
-        }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            function move(dir) {
+                const step = 10;
+                if (!users[me]) return;
+                let u = users[me];
+                if (dir === "up") u.y -= step;
+                if (dir === "down") u.y += step;
+                if (dir === "left") u.x -= step;
+                if (dir === "right") u.x += step;
+                socket.emit("move", { x: u.x, y: u.y });
+            }
 
-            // Caja objetivo
-            ctx.beginPath();
-            ctx.fillStyle = "orange";
-            ctx.arc(target.x, target.y, 20, 0, Math.PI * 2);
-            ctx.fill();
+            document.addEventListener("keydown", function(event) {
+                const key = event.key;
 
-            // Objeto
-            ctx.beginPath();
-            ctx.fillStyle = "black";
-            ctx.arc(obj.x, obj.y, 10, 0, Math.PI * 2);
-            ctx.fill();
+                // Estas son las teclas con las que se puede mover
+                const keysToHandle = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"];
 
-            // Jugadores e hilos
-            for (let id in users) {
-                let u = users[id];
+                if (keysToHandle.includes(key)) {
+                    event.preventDefault(); // Evita que el navegador haga scroll
+                }
+
+                switch (key) {
+                    case "ArrowUp":
+                    case "w":
+                    case "W":
+                        move("up");
+                        break;
+                    case "ArrowDown":
+                    case "s":
+                    case "S":
+                        move("down");
+                        break;
+                    case "ArrowLeft":
+                    case "a":
+                    case "A":
+                        move("left");
+                        break;
+                    case "ArrowRight":
+                    case "d":
+                    case "D":
+                        move("right");
+                        break;
+                }
+            });
+
+            function reiniciar() {
+                fetch("/reset");
+                document.getElementById("msg").textContent = "";
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Caja objetivo
                 ctx.beginPath();
-                ctx.strokeStyle = u.color;
-                ctx.moveTo(u.x, u.y);
-                ctx.lineTo(obj.x, obj.y);
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.fillStyle = u.color;
-                ctx.arc(u.x, u.y, 8, 0, Math.PI * 2);
+                ctx.fillStyle = "orange";
+                ctx.arc(target.x, target.y, 20, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.fillStyle = "#000";
-                ctx.fillText(u.username, u.x + 10, u.y - 10);
+                // Objeto
+                ctx.beginPath();
+                ctx.fillStyle = "black";
+                ctx.arc(obj.x, obj.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Jugadores e hilos
+                for (let id in users) {
+                    let u = users[id];
+                    ctx.beginPath();
+                    ctx.strokeStyle = u.color;
+                    ctx.moveTo(u.x, u.y);
+                    ctx.lineTo(obj.x, obj.y);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.fillStyle = u.color;
+                    ctx.arc(u.x, u.y, 8, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = "#000";
+                    ctx.fillText(u.username, u.x + 10, u.y - 10);
+                }
+
+                // Mostrar usuarios conectados
+                const userList = document.getElementById("user_list");
+                userList.innerHTML = '';
+                for (let id in users) {
+                    const li = document.createElement("li");
+                    li.textContent = users[id].username;
+                    userList.appendChild(li);
+                }
             }
 
-            // Mostrar usuarios conectados
-            const userList = document.getElementById("user_list");
-            userList.innerHTML = '';
-            for (let id in users) {
-                const li = document.createElement("li");
-                li.textContent = users[id].username;
-                userList.appendChild(li);
-            }
-        }
-    </script>
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 't' || event.key === 'T') {
+                    Swal.fire({
+                    title: 'Chat',
+                    input: 'text',
+                    inputPlaceholder: 'comenta aqui...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Aceptar',
+                    cancelButtonText: 'Cancelar'
+                    }).then((result) => {
+                    if (result.isConfirmed && result.value) {
+                        socket.emit("chat_message", { message: result.value});
+                    }
+                    });
+                }
+            });
+
+            document.getElementById("mobileChatSend").addEventListener("click", () => {
+                const input = document.getElementById("mobileChatInput");
+                const message = input.value.trim();
+                if (message !== "") {
+                    socket.emit("chat_message", { message });
+                    input.value = "";
+                }
+            });
+
+            document.getElementById("mobileChatInput").addEventListener("keydown", function(e) {
+                if (e.key === "Enter") {
+                    document.getElementById("mobileChatSend").click();
+                }
+            });
+        </script>
+    </div>
 </body>
 </html>

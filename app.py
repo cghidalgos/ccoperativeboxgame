@@ -8,6 +8,7 @@ app = Flask(__name__)
 socketio = SocketIO(app)
 
 users = {}
+waiting_room = {}
 object_pos = {"x": 300, "y": 300}  # Punto negro inicial
 target_pos = {"x": random.randint(100, 500), "y": random.randint(100, 500)}  # Punto naranja inicial
 
@@ -21,6 +22,11 @@ game_time = time_limit
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/list")
+def list_page():
+    username = request.args.get("username")
+    return render_template("list.html", username=username)
 
 @app.route("/game")
 def game():
@@ -92,6 +98,32 @@ def handle_chat_message(data):
     username = users[request.sid]["username"]
     emit("chat_message", {"username": username, "message": message}, broadcast=True)
 
+@socketio.on("waiting_join")
+def waiting_join(data):
+    uid = request.sid
+    waiting_room[uid] = {
+        "username": data["username"],
+        "ready": False
+    }
+    emit("waiting_update", waiting_room, broadcast=True)
+
+@socketio.on("set_ready")
+def set_ready(data):
+    uid = request.sid
+    if uid in waiting_room:
+        waiting_room[uid]["ready"] = data["ready"]
+        emit("waiting_update", waiting_room, broadcast=True)
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    uid = request.sid
+    if uid in users:
+        del users[uid]
+        socketio.emit("update", {"users": users})
+    if uid in waiting_room:
+        del waiting_room[uid]
+        socketio.emit("waiting_update", waiting_room)
+
 def countdown():
     global game_time
     while game_time > 0:
@@ -103,4 +135,4 @@ def countdown():
 
 if __name__ == '__main__':
     socketio.start_background_task(countdown)
-    socketio.run(app, host="0.0.0.0", port=5004)
+    socketio.run(app, debug=True, host="0.0.0.0", port=5004)
