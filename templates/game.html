@@ -17,8 +17,6 @@
             </div>
             
             <div class="controls-container">
-                <div id="timer">Tiempo restante: <span id="time"></span> segundos</div>
-                
                 <div id="controls">
                     <div class="control-buttons">
                         <div class="control-row">
@@ -45,7 +43,7 @@
                 <h3>Chat</h3>
                 <div id="messages"></div>
                 <div class="chat-hint">Presiona 'T' para chatear</div>
-                <!-- NUEVO input solo visible en pantallas pequeñas -->
+                <!-- input solo visible en pantallas pequeñas -->
                 <div id="mobile-chat" class="mobile-chat">
                     <input type="text" id="mobileChatInput" placeholder="Escribe tu mensaje...">
                     <button id="mobileChatSend">Enviar</button>
@@ -58,12 +56,11 @@
         <script>
             const username = new URLSearchParams(window.location.search).get('username') || "Anon";
             const socket = io();
-            let users = {}, me, obj = {}, target = {}, gameTime = 60;
+            let users = {}, me, obj = {}, target = {};
             const canvas = document.getElementById("canvas");
             const ctx = canvas.getContext("2d");
             let chatMessages = [];
             const MAX_MESSAGES = 8;
-            let timerInterval;
 
             socket.emit("join", { username });
 
@@ -71,29 +68,8 @@
                 users = data.users;
                 obj = data.object;
                 target = data.target;
-                gameTime = data.game_time;
                 me = Object.keys(users).find(id => users[id].username === username);
                 draw();
-
-                clearInterval(timerInterval); // por si ya había uno
-                timerInterval = setInterval(() => {
-                    if (gameTime > 0) {
-                        gameTime--;
-                        document.getElementById("time").textContent = gameTime;
-                    } else {
-                        clearInterval(timerInterval);
-                        Swal.fire({
-                            icon: 'error',
-                            title: '¡Tiempo agotado!',
-                            text: 'Nadie capturó el punto a tiempo.',
-                            confirmButtonText: 'Reiniciar',
-                            allowOutsideClick: false,
-                            allowEscapeKey: false,
-                        }).then(() => {
-                            window.location.href = `/list?username=${encodeURIComponent(username)}`;
-                        });
-                    }
-                }, 1000);
             });
 
             socket.on("update", data => {
@@ -101,7 +77,6 @@
                 obj = data.object;
                 target = data.target;
                 draw();
-                document.getElementById("time").textContent = gameTime;
             });
 
             socket.on("victory", data => {
@@ -118,15 +93,10 @@
             });
 
             socket.on("chat_message", data => {
-                // Agregar nuevo mensaje al inicio del array
                 chatMessages.unshift(`${data.username}: ${data.message}`);
-                
-                // Mantener solo los últimos 8 mensajes
                 if (chatMessages.length > MAX_MESSAGES) {
                     chatMessages = chatMessages.slice(0, MAX_MESSAGES);
                 }
-                
-                // Actualizar la visualización
                 updateChatDisplay();
             });
 
@@ -137,7 +107,6 @@
             function updateChatDisplay() {
                 const messagesContainer = document.getElementById("messages");
                 messagesContainer.innerHTML = '';
-                
                 chatMessages.forEach(message => {
                     const msgElement = document.createElement("div");
                     msgElement.textContent = message;
@@ -158,14 +127,10 @@
 
             document.addEventListener("keydown", function(event) {
                 const key = event.key;
-
-                // Estas son las teclas con las que se puede mover
                 const keysToHandle = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"];
-
                 if (keysToHandle.includes(key)) {
-                    event.preventDefault(); // Evita que el navegador haga scroll
+                    event.preventDefault();
                 }
-
                 switch (key) {
                     case "ArrowUp":
                     case "w":
@@ -198,13 +163,13 @@
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                // Caja objetivo
+                // Punto objetivo
                 ctx.beginPath();
                 ctx.fillStyle = "orange";
                 ctx.arc(target.x, target.y, 20, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Objeto
+                // Objeto negro
                 ctx.beginPath();
                 ctx.fillStyle = "black";
                 ctx.arc(obj.x, obj.y, 10, 0, Math.PI * 2);
@@ -228,7 +193,7 @@
                     ctx.fillText(u.username, u.x + 10, u.y - 10);
                 }
 
-                // Mostrar usuarios conectados
+                // Lista de usuarios
                 const userList = document.getElementById("user_list");
                 userList.innerHTML = '';
                 for (let id in users) {
@@ -238,23 +203,25 @@
                 }
             }
 
+            // Chat con tecla "T"
             document.addEventListener('keydown', function(event) {
                 if (event.key === 't' || event.key === 'T') {
                     Swal.fire({
-                    title: 'Chat',
-                    input: 'text',
-                    inputPlaceholder: 'comenta aqui...',
-                    showCancelButton: true,
-                    confirmButtonText: 'Aceptar',
-                    cancelButtonText: 'Cancelar'
+                        title: 'Chat',
+                        input: 'text',
+                        inputPlaceholder: 'comenta aqui...',
+                        showCancelButton: true,
+                        confirmButtonText: 'Aceptar',
+                        cancelButtonText: 'Cancelar'
                     }).then((result) => {
-                    if (result.isConfirmed && result.value) {
-                        socket.emit("chat_message", { message: result.value});
-                    }
+                        if (result.isConfirmed && result.value) {
+                            socket.emit("chat_message", { message: result.value});
+                        }
                     });
                 }
             });
 
+            // Chat móvil
             document.getElementById("mobileChatSend").addEventListener("click", () => {
                 const input = document.getElementById("mobileChatInput");
                 const message = input.value.trim();
