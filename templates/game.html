@@ -43,7 +43,7 @@
                 <h3>Chat</h3>
                 <div id="messages"></div>
                 <div class="chat-hint">Presiona 'T' para chatear</div>
-                <!-- input solo visible en pantallas pequeñas -->
+                <!-- NUEVO input solo visible en pantallas pequeñas -->
                 <div id="mobile-chat" class="mobile-chat">
                     <input type="text" id="mobileChatInput" placeholder="Escribe tu mensaje...">
                     <button id="mobileChatSend">Enviar</button>
@@ -163,13 +163,13 @@
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                // Punto objetivo
+                // Caja objetivo
                 ctx.beginPath();
                 ctx.fillStyle = "orange";
                 ctx.arc(target.x, target.y, 20, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Objeto negro
+                // Objeto
                 ctx.beginPath();
                 ctx.fillStyle = "black";
                 ctx.arc(obj.x, obj.y, 10, 0, Math.PI * 2);
@@ -193,7 +193,7 @@
                     ctx.fillText(u.username, u.x + 10, u.y - 10);
                 }
 
-                // Lista de usuarios
+                // Mostrar usuarios conectados
                 const userList = document.getElementById("user_list");
                 userList.innerHTML = '';
                 for (let id in users) {
@@ -203,7 +203,6 @@
                 }
             }
 
-            // Chat con tecla "T"
             document.addEventListener('keydown', function(event) {
                 if (event.key === 't' || event.key === 'T') {
                     Swal.fire({
@@ -215,13 +214,12 @@
                         cancelButtonText: 'Cancelar'
                     }).then((result) => {
                         if (result.isConfirmed && result.value) {
-                            socket.emit("chat_message", { message: result.value});
+                            socket.emit("chat_message", { message: result.value });
                         }
                     });
                 }
             });
 
-            // Chat móvil
             document.getElementById("mobileChatSend").addEventListener("click", () => {
                 const input = document.getElementById("mobileChatInput");
                 const message = input.value.trim();
