@@ -56,9 +56,7 @@ def on_move(data):
         users[request.sid]["x"] = data["x"]
         users[request.sid]["y"] = data["y"]
 
-        # Verificar victoria (si el objeto está en la caja)
-        dx = users[request.sid]["x"] - target["x"]
-        dy = users[request.sid]["y"] - target["y"]
+        # Verificar victoria (si el objeto está cerca del objetivo)
         if abs(obj["x"] - target["x"]) < 20 and abs(obj["y"] - target["y"]) < 20:
             socketio.emit("victory", {"message": f"{users[request.sid]['username']} ganó 🎉"})
 
