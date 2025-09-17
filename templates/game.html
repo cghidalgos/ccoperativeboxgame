@@ -82,11 +82,53 @@
                     title: '¡Victoria!',
                     text: data.message,
                     icon: 'success',
+                    showCancelButton: true,
                     confirmButtonText: 'Reiniciar',
+                    cancelButtonText: 'Salir',
                     allowOutsideClick: false,
                     allowEscapeKey: false,
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        fetch("/full_reset").then(() => {
+                            window.location.href = "/";
+                        });
+                    } else {
+                        window.location.href = "/";
+                    }
+                });
+            });
+
+            // Tiempo agotado
+            socket.on("time_up", data => {
+                Swal.fire({
+                    title: 'Tiempo terminado',
+                    text: data.message,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Reiniciar',
+                    cancelButtonText: 'Salir',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        fetch("/full_reset").then(() => {
+                            window.location.href = "/";
+                        });
+                    } else {
+                        window.location.href = "/";
+                    }
+                });
+            });
+
+            // Si otro jugador reinicia
+            socket.on("force_reset", data => {
+                Swal.fire({
+                    title: 'Reinicio',
+                    text: data.message,
+                    icon: 'info',
+                    confirmButtonText: 'OK'
                 }).then(() => {
-                    window.location.href = `/list?username=${encodeURIComponent(username)}`;
+                    window.location.href = "/";
                 });
             });
 
