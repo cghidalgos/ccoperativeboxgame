@@ -55,12 +55,10 @@ def handle_join(data):
 @socketio.on("move")
 def handle_move(data):
     uid = request.sid
-    if uid not in users:
-        return
-
+    if uid not in users: return
     new_x = data["x"]
     new_y = data["y"]
-
+    
     dx = new_x - object_pos["x"]
     dy = new_y - object_pos["y"]
     distancia_actual = math.hypot(dx, dy)
@@ -73,7 +71,6 @@ def handle_move(data):
     users[uid]["x"] = new_x
     users[uid]["y"] = new_y
 
-    # El objeto negro se mueve al promedio de todos los jugadores
     avg_x = sum(user["x"] for user in users.values()) / len(users)
     avg_y = sum(user["y"] for user in users.values()) / len(users)
     object_pos["x"] = avg_x
@@ -81,7 +78,6 @@ def handle_move(data):
 
     socketio.emit("update", {"users": users, "object": object_pos, "target": target_pos})
 
-    # Verificar victoria
     if math.hypot(object_pos["x"] - target_pos["x"], object_pos["y"] - target_pos["y"]) < 20:
         socketio.emit("victory", {"message": "¡Victoria! El punto negro ha llegado al punto naranja."})
 
